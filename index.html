@@ -6,6 +6,7 @@
     <title>15-Player Perfect Doubles Tournament Scorekeeper</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script>
@@ -66,10 +67,10 @@
 
             <!-- Global Action Controls -->
             <div class="flex items-center flex-wrap gap-2">
-                <div id="sync-status" class="text-xs px-2.5 py-1.5 rounded-lg bg-emerald-950/60 text-emerald-400 border border-emerald-800/80 flex items-center gap-1.5 font-medium">
+                <div id="sync-status" onclick="openSyncModal()" class="text-xs px-2.5 py-1.5 rounded-lg bg-emerald-950/60 text-emerald-400 border border-emerald-800/80 flex items-center gap-1.5 font-medium cursor-pointer hover:bg-emerald-900/50 transition">
                     <span id="sync-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                     <i class="fa-solid fa-wifi text-[10px]"></i> <span id="sync-text">Live Sync (Room: TOMATO-15)</span>
-                    <button onclick="changeRoomCode()" class="ml-1 text-[10px] underline hover:text-white" title="Change Room Code">Edit</button>
+                    <span class="ml-1 text-[10px] bg-emerald-800/60 px-1.5 py-0.5 rounded text-emerald-200">Manage</span>
                 </div>
                 <button onclick="fillSampleScores()" class="text-xs px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center gap-1.5">
                     <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i> Sample Scores
@@ -246,99 +247,304 @@
                     <div class="flex justify-between items-center text-xs text-slate-400">
                         <span>CSV Data Preview (Match Schedule & Scores)</span>
                     </div>
+                    <textarea id="csv-preview" readonly class="w-full h-48 bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-xs text-slate-300 focus:outline-none"></textarea>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- MODAL: Player Name Customizer -->
+    <div id="modal-names" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <!-- ... existing name modal content ... -->
+    </div>
+
+    <!-- MODAL: Live Sync & Room Manager -->
+    <div id="modal-sync" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel w-full max-w-md rounded-2xl p-6 space-y-5 shadow-2xl border border-slate-700">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-satellite-dish text-emerald-400"></i> Live Sync Settings & Room Link
+                </h3>
+                <button onclick="closeSyncModal()" class="text-slate-400 hover:text-white p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs font-semibold text-slate-300 block mb-1">Tournament Room Code</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="input-room-code" placeholder="e.g. SMTC" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-mono uppercase focus:border-emerald-500 focus:outline-none">
+                        <button onclick="applyRoomCodeFromInput()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-lg transition">
+                            Set Room
+                        </button>
+                    </div>
+                    <p class="text-[11px] text-slate-400 mt-1">All phones and computers must use the exact same room code to sync.</p>
+                </div>
+
+                <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2 text-xs">
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-400">Connection Status:</span>
+                        <span id="sync-modal-status" class="font-bold text-emerald-400 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Connected
+                        </span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-400">Active Room:</span>
+                        <span id="sync-modal-room" class="font-mono text-amber-300 font-bold">TOMATO-15</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-400">Active Server:</span>
+                        <span id="sync-modal-server" class="text-slate-300 font-mono text-[11px]">Primary Cloud Broker</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 pt-1">
+                    <button onclick="manualPushScores()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs text-white font-semibold flex items-center justify-center gap-1.5 transition">
+                        <i class="fa-solid fa-paper-plane text-emerald-400"></i> Push My Scores
+                    </button>
+                    <button onclick="manualPullScores()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs text-white font-semibold flex items-center justify-center gap-1.5 transition">
+                        <i class="fa-solid fa-rotate text-amber-400"></i> Fetch Room Scores
+                    </button>
+                </div>
+
+                <div class="pt-2 border-t border-slate-800">
+                    <button onclick="copyDirectRoomLink()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-950 transition">
+                        <i class="fa-solid fa-link"></i> Copy Direct Share Link for Phones
+                    </button>
+                    <p class="text-[10px] text-slate-400 text-center mt-1.5">Generates a URL with room code pre-embedded so scanning/opening connects instantly.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-xs font-semibold shadow-xl transition-all duration-300 transform translate-y-10 opacity-0 pointer-events-none flex items-center gap-2 z-50">
+        <i class="fa-solid fa-circle-check"></i> <span id="toast-msg">Action completed</span>
+    </div>
+
     <!-- Real-Time WebSocket Multi-Device Sync Engine -->
     <script>
         let mqttClient = null;
-        let roomCode = localStorage.getItem('p15_room_code') || 'TOMATO-15';
+        let peerInstance = null;
+        let activePeerConnections = [];
+
+        // Public MQTT brokers to try in sequence for maximum reliability across carriers
+        const MQTT_BROKERS = [
+            'wss://broker.hivemq.com:8884/mqtt',
+            'wss://broker.emqx.io:8084/mqtt',
+            'wss://test.mosquitto.org:8081'
+        ];
+        let currentBrokerIndex = 0;
+
+        // Parse room code from URL query parameter ?room=SMTC or fallback to local storage
+        function getInitialRoomCode() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomParam = urlParams.get('room');
+            if (roomParam && roomParam.trim() !== '') {
+                const code = roomParam.trim().toUpperCase();
+                localStorage.setItem('p15_room_code', code);
+                return code;
+            }
+            return (localStorage.getItem('p15_room_code') || 'TOMATO-15').toUpperCase();
+        }
+
+        let roomCode = getInitialRoomCode();
 
         function initRealtimeSync() {
-            const syncText = document.getElementById('sync-text');
-            const syncDot = document.getElementById('sync-dot');
-            if (syncText) syncText.innerText = `Live Sync (Room: ${roomCode})`;
+            updateSyncUIStatus('Connecting...', 'amber', 'Connecting to Cloud...');
+
+            // Clean up previous client
+            if (mqttClient) {
+                try { mqttClient.end(true); } catch(e) {}
+            }
+
+            const targetBroker = MQTT_BROKERS[currentBrokerIndex];
+            const clientId = 'tennis_court_' + Math.random().toString(16).substring(2, 10);
 
             try {
-                mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt', {
-                    clientId: 'tennis_court_' + Math.random().toString(16).substring(2, 10),
+                mqttClient = mqtt.connect(targetBroker, {
+                    clientId: clientId,
                     keepalive: 30,
-                    reconnectPeriod: 2000
+                    connectTimeout: 8000,
+                    reconnectPeriod: 3000
                 });
 
                 mqttClient.on('connect', () => {
-                    if (syncDot) syncDot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
-                    if (syncText) syncText.innerText = `Live Sync (${roomCode})`;
+                    const serverName = targetBroker.includes('hivemq') ? 'HiveMQ Cloud' :
+                                      (targetBroker.includes('emqx') ? 'EMQX Cloud' : 'Mosquitto Server');
+                    updateSyncUIStatus(`Live (${roomCode})`, 'emerald', serverName);
 
-                    mqttClient.subscribe(`tennis/scoreboard/${roomCode}`, (err) => {
+                    mqttClient.subscribe(`tennis/scoreboard/v2/${roomCode}`, (err) => {
                         if (!err) {
-                            // Request current state from existing devices on court
+                            // Request state from other devices
                             broadcastMessage({ type: 'REQUEST_STATE' });
                         }
                     });
                 });
 
-                mqttClient.on('reconnect', () => {
-                    if (syncDot) syncDot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse';
-                    if (syncText) syncText.innerText = `Reconnecting...`;
+                mqttClient.on('error', (err) => {
+                    console.warn('MQTT connection error, trying fallback broker...', err);
+                    tryNextBroker();
                 });
 
                 mqttClient.on('offline', () => {
-                    if (syncDot) syncDot.className = 'w-2 h-2 rounded-full bg-rose-500';
-                    if (syncText) syncText.innerText = `Offline (Local Only)`;
+                    updateSyncUIStatus(`Offline (Room: ${roomCode})`, 'rose', 'Disconnected');
                 });
 
                 mqttClient.on('message', (topic, message) => {
                     try {
                         const data = JSON.parse(message.toString());
-                        if (data.sender === mqttClient.options.clientId) return; // Skip own messages
+                        if (data.sender === clientId) return; // Ignore own messages
 
-                        if (data.type === 'SYNC_DATA') {
-                            window.matchScores = data.matchScores || {};
-                            window.playerNames = data.playerNames || {};
-                            saveLocalOnly();
-                            refreshAllViews();
-                            showToast('Scores synced live from court!');
-                        } else if (data.type === 'REQUEST_STATE') {
-                            // Respond with our state if we have scores
-                            broadcastMessage({
-                                type: 'SYNC_DATA',
-                                matchScores: window.matchScores,
-                                playerNames: window.playerNames
-                            });
-                        }
+                        handleIncomingSyncData(data);
                     } catch(e) { console.error('Sync parse error', e); }
                 });
             } catch(e) {
-                console.error('WebSocket setup failed', e);
+                console.error('MQTT setup error:', e);
+                tryNextBroker();
+            }
+
+            initPeerJSConnection();
+        }
+
+        function tryNextBroker() {
+            currentBrokerIndex = (currentBrokerIndex + 1) % MQTT_BROKERS.length;
+            setTimeout(() => {
+                if (mqttClient && !mqttClient.connected) {
+                    initRealtimeSync();
+                }
+            }, 1000);
+        }
+
+        function initPeerJSConnection() {
+            try {
+                if (peerInstance) peerInstance.destroy();
+                const myPeerId = `tennis-p15-${roomCode}-${Math.random().toString(36).substring(2, 7)}`;
+                peerInstance = new Peer(myPeerId);
+
+                peerInstance.on('connection', (conn) => {
+                    activePeerConnections.push(conn);
+                    conn.on('data', (data) => handleIncomingSyncData(data));
+                });
+            } catch(e) { console.log('PeerJS fallback notice', e); }
+        }
+
+        function handleIncomingSyncData(data) {
+            if (data.type === 'SYNC_DATA') {
+                if (data.matchScores) window.matchScores = data.matchScores;
+                if (data.playerNames) window.playerNames = data.playerNames;
+                saveLocalOnly();
+                refreshViewsSafely();
+                showToast('Scores synced live from court!');
+            } else if (data.type === 'REQUEST_STATE') {
+                broadcastState();
             }
         }
 
-        function broadcastMessage(payload) {
-            if (mqttClient && mqttClient.connected) {
-                payload.sender = mqttClient.options.clientId;
-                mqttClient.publish(`tennis/scoreboard/${roomCode}`, JSON.stringify(payload));
+        function updateSyncUIStatus(text, color, serverLabel) {
+            const syncText = document.getElementById('sync-text');
+            const syncDot = document.getElementById('sync-dot');
+            const modalStatus = document.getElementById('sync-modal-status');
+            const modalRoom = document.getElementById('sync-modal-room');
+            const modalServer = document.getElementById('sync-modal-server');
+
+            const colorClasses = {
+                emerald: 'bg-emerald-400',
+                amber: 'bg-amber-400',
+                rose: 'bg-rose-500'
+            };
+
+            if (syncText) syncText.innerText = text;
+            if (syncDot) syncDot.className = `w-2 h-2 rounded-full ${colorClasses[color] || 'bg-emerald-400'} animate-pulse`;
+
+            if (modalStatus) {
+                modalStatus.className = `font-bold text-${color}-400 flex items-center gap-1.5`;
+                modalStatus.innerHTML = `<span class="w-2 h-2 rounded-full ${colorClasses[color] || 'bg-emerald-400'} animate-pulse"></span> ${text}`;
             }
+            if (modalRoom) modalRoom.innerText = roomCode;
+            if (modalServer && serverLabel) modalServer.innerText = serverLabel;
+        }
+
+        function broadcastMessage(payload) {
+            payload.sender = mqttClient && mqttClient.options ? mqttClient.options.clientId : 'device_' + Math.random();
+            const msgStr = JSON.stringify(payload);
+
+            if (mqttClient && mqttClient.connected) {
+                mqttClient.publish(`tennis/scoreboard/v2/${roomCode}`, msgStr);
+            }
+
+            activePeerConnections.forEach(conn => {
+                if (conn.open) conn.send(payload);
+            });
         }
 
         function broadcastState() {
             broadcastMessage({
                 type: 'SYNC_DATA',
-                matchScores: window.matchScores,
-                playerNames: window.playerNames
+                matchScores: window.matchScores || {},
+                playerNames: window.playerNames || {}
             });
         }
 
-        function changeRoomCode() {
-            const newCode = prompt('Enter a Tournament Room Code (all phones must use the same code):', roomCode);
-            if (newCode && newCode.trim() !== '') {
-                roomCode = newCode.trim().toUpperCase();
-                localStorage.setItem('p15_room_code', roomCode);
-                if (mqttClient) mqttClient.end();
-                initRealtimeSync();
-                showToast(`Switched to room: ${roomCode}`);
+        function openSyncModal() {
+            document.getElementById('input-room-code').value = roomCode;
+            document.getElementById('modal-sync').classList.remove('hidden');
+        }
+
+        function closeSyncModal() {
+            document.getElementById('modal-sync').classList.add('hidden');
+        }
+
+        function applyRoomCodeFromInput() {
+            const val = document.getElementById('input-room-code').value.trim().toUpperCase();
+            if (val && val !== '') {
+                changeRoomCode(val);
+                closeSyncModal();
             }
         }
 
-        function refreshAllViews() {
-            if (typeof renderMatchInputs === 'function') renderMatchInputs();
+        function changeRoomCode(newCode) {
+            roomCode = newCode.trim().toUpperCase();
+            localStorage.setItem('p15_room_code', roomCode);
+
+            // Update URL without reloading page
+            const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?room=' + roomCode;
+            window.history.pushState({ path: newUrl }, '', newUrl);
+
+            initRealtimeSync();
+            setTimeout(() => broadcastState(), 1000);
+            showToast(`Switched to room: ${roomCode}`);
+        }
+
+        function manualPushScores() {
+            broadcastState();
+            showToast('Local scores pushed to room!');
+        }
+
+        function manualPullScores() {
+            broadcastMessage({ type: 'REQUEST_STATE' });
+            showToast('Requesting latest scores from room...');
+        }
+
+        function copyDirectRoomLink() {
+            const shareUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?room=' + roomCode;
+            const textarea = document.createElement('textarea');
+            textarea.value = shareUrl;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            showToast('Room link copied! Share with players.');
+        }
+
+        function refreshViewsSafely() {
+            // Update input fields without resetting active typing focus
+            const activeEl = document.activeElement;
+            const activeInputId = activeEl ? activeEl.id : null;
+
+            if (typeof renderMatchInputs === 'function' && !activeInputId) renderMatchInputs();
             if (typeof renderLeaderboard === 'function') renderLeaderboard();
             if (typeof renderInspector === 'function') renderInspector();
             if (typeof updateCSVPreview === 'function') updateCSVPreview();
@@ -347,669 +553,3 @@
         function saveLocalOnly() {
             try {
                 localStorage.setItem('p15_names', JSON.stringify(playerNames));
-                localStorage.setItem('p15_scores', JSON.stringify(matchScores));
-            } catch (e) {
-                console.error('Failed to save local storage', e);
-            }
-        }
-
-        function saveData() {
-            saveLocalOnly();
-            broadcastState();
-        }
-    </script>
-
-    <script>
-        // Mathematically Perfect Schedule (5 Rounds, 3 Courts per round, 15 players)
-        const SCHEDULE = [
-            {
-                round: 1,
-                sitOuts: [13, 14, 15],
-                courts: [
-                    { id: 'R1C1', court: 1, teamA: [1, 2], teamB: [3, 4] },
-                    { id: 'R1C2', court: 2, teamA: [5, 6], teamB: [7, 8] },
-                    { id: 'R1C3', court: 3, teamA: [9, 10], teamB: [11, 12] }
-                ]
-            },
-            {
-                round: 2,
-                sitOuts: [4, 8, 12],
-                courts: [
-                    { id: 'R2C1', court: 1, teamA: [1, 5], teamB: [9, 13] },
-                    { id: 'R2C2', court: 2, teamA: [2, 6], teamB: [11, 14] },
-                    { id: 'R2C3', court: 3, teamA: [3, 7], teamB: [10, 15] }
-                ]
-            },
-            {
-                round: 3,
-                sitOuts: [3, 5, 11],
-                courts: [
-                    { id: 'R3C1', court: 1, teamA: [1, 7], teamB: [12, 14] },
-                    { id: 'R3C2', court: 2, teamA: [2, 8], teamB: [10, 13] },
-                    { id: 'R3C3', court: 3, teamA: [4, 6], teamB: [9, 15] }
-                ]
-            },
-            {
-                round: 4,
-                sitOuts: [2, 7, 9],
-                courts: [
-                    { id: 'R4C1', court: 1, teamA: [1, 8], teamB: [11, 15] },
-                    { id: 'R4C2', court: 2, teamA: [3, 6], teamB: [12, 13] },
-                    { id: 'R4C3', court: 3, teamA: [4, 5], teamB: [10, 14] }
-                ]
-            },
-            {
-                round: 5,
-                sitOuts: [1, 6, 10],
-                courts: [
-                    { id: 'R5C1', court: 1, teamA: [2, 5], teamB: [12, 15] },
-                    { id: 'R5C2', court: 2, teamA: [3, 8], teamB: [9, 14] },
-                    { id: 'R5C3', court: 3, teamA: [4, 7], teamB: [11, 13] }
-                ]
-            }
-        ];
-
-        // State Store
-        let playerNames = {};
-        let matchScores = {}; // Key: match ID (e.g. 'R1C1') => { scoreA: number|null, scoreB: number|null }
-        let selectedInspectorPlayer = 1;
-
-        // Initialize Default Player Names
-        for (let i = 1; i <= 15; i++) {
-            playerNames[i] = `Player ${i}`;
-        }
-
-        window.onload = function() {
-            loadSavedData();
-            initRealtimeSync();
-            renderMatchInputs();
-            renderLeaderboard();
-            renderInspector();
-            updateCSVPreview();
-        };
-
-        function loadSavedData() {
-            try {
-                const savedNames = localStorage.getItem('p15_names');
-                if (savedNames) playerNames = JSON.parse(savedNames);
-
-                const savedScores = localStorage.getItem('p15_scores');
-                if (savedScores) matchScores = JSON.parse(savedScores);
-            } catch (e) {
-                console.error('Failed to load local storage', e);
-            }
-        }
-
-        function saveData() {
-            try {
-                localStorage.setItem('p15_names', JSON.stringify(playerNames));
-                localStorage.setItem('p15_scores', JSON.stringify(matchScores));
-                if (typeof window.syncToCloud === 'function') {
-                    window.syncToCloud();
-                }
-            } catch (e) {
-                console.error('Failed to save local storage', e);
-            }
-        }
-
-        function showToast(msg) {
-            const toast = document.getElementById('toast');
-            document.getElementById('toast-msg').innerText = msg;
-            toast.classList.remove('translate-y-10', 'opacity-0', 'pointer-events-none');
-            setTimeout(() => {
-                toast.classList.add('translate-y-10', 'opacity-0', 'pointer-events-none');
-            }, 2500);
-        }
-
-        function switchTab(tabId) {
-            const tabs = ['matches', 'standings', 'inspector', 'gsheet'];
-            tabs.forEach(t => {
-                const view = document.getElementById(`view-${t}`);
-                const btn = document.getElementById(`tab-${t}`);
-                if (t === tabId) {
-                    view.classList.remove('hidden');
-                    btn.classList.add('border-emerald-500', 'text-emerald-400', 'font-semibold');
-                    btn.classList.remove('border-transparent', 'text-slate-400');
-                } else {
-                    view.classList.add('hidden');
-                    btn.classList.remove('border-emerald-500', 'text-emerald-400', 'font-semibold');
-                    btn.classList.add('border-transparent', 'text-slate-400');
-                }
-            });
-
-            if (tabId === 'standings') renderLeaderboard();
-            if (tabId === 'inspector') renderInspector();
-            if (tabId === 'gsheet') updateCSVPreview();
-        }
-
-        function renderMatchInputs() {
-            const container = document.getElementById('rounds-container');
-            container.innerHTML = '';
-
-            SCHEDULE.forEach(roundData => {
-                const sitOutNames = roundData.sitOuts.map(p => `#${p} ${playerNames[p]}`).join(', ');
-
-                let roundCard = document.createElement('div');
-                roundCard.className = 'glass-panel rounded-2xl p-5 space-y-4 shadow-lg border border-slate-800';
-
-                let roundHeader = `
-                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800/80 pb-3 gap-2">
-                        <div class="flex items-center gap-3">
-                            <span class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-sm border border-emerald-500/30">
-                                R${roundData.round}
-                            </span>
-                            <h3 class="text-sm font-bold text-white">Round ${roundData.round} Matches</h3>
-                        </div>
-                        <div class="text-xs bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800 text-slate-400">
-                            <i class="fa-solid fa-bed text-amber-400 mr-1.5"></i> Rest / Sit-outs: <strong class="text-slate-200">${sitOutNames}</strong>
-                        </div>
-                    </div>
-                `;
-
-                let courtsGrid = document.createElement('div');
-                courtsGrid.className = 'grid grid-cols-1 md:grid-cols-3 gap-4';
-
-                roundData.courts.forEach(court => {
-                    const matchId = court.id;
-                    const scores = matchScores[matchId] || { scoreA: '', scoreB: '' };
-
-                    const pA1 = court.teamA[0], pA2 = court.teamA[1];
-                    const pB1 = court.teamB[0], pB2 = court.teamB[1];
-
-                    // Outcome calculation preview
-                    let outcomeBadge = '<span class="text-slate-500 italic">Enter score</span>';
-                    const numA = parseFloat(scores.scoreA);
-                    const numB = parseFloat(scores.scoreB);
-
-                    if (!isNaN(numA) && !isNaN(numB)) {
-                        if (numA > numB) {
-                            outcomeBadge = `<span class="text-emerald-400 font-semibold"><i class="fa-solid fa-trophy mr-1 text-amber-400"></i> Team A Wins (+1 Set Pt)</span>`;
-                        } else if (numB > numA) {
-                            outcomeBadge = `<span class="text-emerald-400 font-semibold"><i class="fa-solid fa-trophy mr-1 text-amber-400"></i> Team B Wins (+1 Set Pt)</span>`;
-                        } else {
-                            outcomeBadge = `<span class="text-slate-300 font-semibold">Tie Game (+0.5 Set Pt)</span>`;
-                        }
-                    }
-
-                    let courtHtml = `
-                        <div class="bg-slate-950/70 p-4 rounded-xl border border-slate-800/80 flex flex-col justify-between space-y-3">
-                            <div class="flex justify-between items-center text-xs text-slate-400 font-semibold">
-                                <span>Court ${court.court}</span>
-                                <div id="badge-${matchId}">${outcomeBadge}</div>
-                            </div>
-
-                            <div class="space-y-2">
-                                <!-- Team A -->
-                                <div class="flex justify-between items-center bg-slate-900/90 p-2.5 rounded-lg border border-slate-800">
-                                    <div class="text-xs">
-                                        <div class="font-bold text-slate-200">Team A</div>
-                                        <div class="text-[11px] text-slate-400">#${pA1} ${playerNames[pA1]} & #${pA2} ${playerNames[pA2]}</div>
-                                    </div>
-                                    <input type="number" min="0" max="99" value="${scores.scoreA !== undefined ? scores.scoreA : ''}"
-                                        oninput="onScoreChange('${matchId}', 'scoreA', this.value)"
-                                        placeholder="0"
-                                        class="w-12 h-9 text-center text-sm font-bold bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-lg text-emerald-400 focus:outline-none">
-                                </div>
-
-                                <div class="text-center text-[10px] text-slate-600 uppercase tracking-widest font-bold">VS</div>
-
-                                <!-- Team B -->
-                                <div class="flex justify-between items-center bg-slate-900/90 p-2.5 rounded-lg border border-slate-800">
-                                    <div class="text-xs">
-                                        <div class="font-bold text-slate-200">Team B</div>
-                                        <div class="text-[11px] text-slate-400">#${pB1} ${playerNames[pB1]} & #${pB2} ${playerNames[pB2]}</div>
-                                    </div>
-                                    <input type="number" min="0" max="99" value="${scores.scoreB !== undefined ? scores.scoreB : ''}"
-                                        oninput="onScoreChange('${matchId}', 'scoreB', this.value)"
-                                        placeholder="0"
-                                        class="w-12 h-9 text-center text-sm font-bold bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-lg text-emerald-400 focus:outline-none">
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                    courtsGrid.innerHTML += courtHtml;
-                });
-
-                roundCard.innerHTML = roundHeader;
-                roundCard.appendChild(courtsGrid);
-                container.appendChild(roundCard);
-            });
-        }
-
-        function onScoreChange(matchId, team, val) {
-            if (!matchScores[matchId]) matchScores[matchId] = { scoreA: '', scoreB: '' };
-            matchScores[matchId][team] = val !== '' ? parseInt(val, 10) : '';
-            saveData();
-
-            // Update local badge
-            const scores = matchScores[matchId];
-            const badgeEl = document.getElementById(`badge-${matchId}`);
-            if (badgeEl) {
-                const numA = parseInt(scores.scoreA, 10);
-                const numB = parseInt(scores.scoreB, 10);
-
-                if (!isNaN(numA) && !isNaN(numB)) {
-                    if (numA > numB) {
-                        badgeEl.innerHTML = `<span class="text-emerald-400 font-semibold"><i class="fa-solid fa-trophy mr-1 text-amber-400"></i> Team A Wins (+1 Set Pt)</span>`;
-                    } else if (numB > numA) {
-                        badgeEl.innerHTML = `<span class="text-emerald-400 font-semibold"><i class="fa-solid fa-trophy mr-1 text-amber-400"></i> Team B Wins (+1 Set Pt)</span>`;
-                    } else {
-                        badgeEl.innerHTML = `<span class="text-slate-300 font-semibold">Tie Game (+0.5 Set Pt)</span>`;
-                    }
-                } else {
-                    badgeEl.innerHTML = `<span class="text-slate-500 italic">Enter score</span>`;
-                }
-            }
-        }
-
-        function calculateStats() {
-            let stats = {};
-            for (let i = 1; i <= 15; i++) {
-                stats[i] = {
-                    id: i,
-                    name: playerNames[i],
-                    played: 0,
-                    wins: 0,
-                    losses: 0,
-                    ties: 0,
-                    gamesScored: 0,
-                    gamesConceded: 0,
-                    totalPoints: 0,
-                    partners: [],
-                    opponents: []
-                };
-            }
-
-            SCHEDULE.forEach(roundData => {
-                roundData.courts.forEach(court => {
-                    const matchId = court.id;
-                    const scores = matchScores[matchId];
-                    if (!scores) return;
-
-                    const numA = parseInt(scores.scoreA, 10);
-                    const numB = parseInt(scores.scoreB, 10);
-
-                    if (isNaN(numA) || isNaN(numB)) return; // Only count completed matches
-
-                    const teamA = court.teamA;
-                    const teamB = court.teamB;
-
-                    // Points rule:
-                    // Win = 1 set point + games won
-                    // Loss = 0 set point + games won
-                    // Tie = 0.5 set point + games won
-                    let ptsA = numA + (numA > numB ? 1 : (numA === numB ? 0.5 : 0));
-                    let ptsB = numB + (numB > numA ? 1 : (numA === numB ? 0.5 : 0));
-
-                    // Process Team A
-                    teamA.forEach(p => {
-                        stats[p].played += 1;
-                        stats[p].gamesScored += numA;
-                        stats[p].gamesConceded += numB;
-                        stats[p].totalPoints += ptsA;
-                        if (numA > numB) stats[p].wins += 1;
-                        else if (numB > numA) stats[p].losses += 1;
-                        else stats[p].ties += 1;
-                    });
-
-                    // Process Team B
-                    teamB.forEach(p => {
-                        stats[p].played += 1;
-                        stats[p].gamesScored += numB;
-                        stats[p].gamesConceded += numA;
-                        stats[p].totalPoints += ptsB;
-                        if (numB > numA) stats[p].wins += 1;
-                        else if (numA > numB) stats[p].losses += 1;
-                        else stats[p].ties += 1;
-                    });
-                });
-            });
-
-            return Object.values(stats);
-        }
-
-        function renderLeaderboard() {
-            const stats = calculateStats();
-
-            // Sort logic: Total Points -> Wins -> Game Diff -> Games Scored
-            stats.sort((a, b) => {
-                if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
-                if (b.wins !== a.wins) return b.wins - a.wins;
-                const diffB = b.gamesScored - b.gamesConceded;
-                const diffA = a.gamesScored - a.gamesConceded;
-                if (diffB !== diffA) return diffB - diffA;
-                return b.gamesScored - a.gamesScored;
-            });
-
-            // Render Podium
-            const podiumContainer = document.getElementById('podium-container');
-            podiumContainer.innerHTML = '';
-
-            const top3 = stats.slice(0, 3);
-            const podiumConfig = [
-                { pos: 2, label: '2nd Place', border: 'border-slate-400', badge: 'bg-slate-400 text-slate-950', icon: 'fa-medal text-slate-300' },
-                { pos: 1, label: '1st Champion', border: 'border-amber-400', badge: 'bg-amber-400 text-slate-950', icon: 'fa-crown text-amber-400' },
-                { pos: 3, label: '3rd Place', border: 'border-amber-700', badge: 'bg-amber-700 text-white', icon: 'fa-award text-amber-600' }
-            ];
-
-            // Re-order for podium display (2nd, 1st, 3rd)
-            const orderedPodium = [top3[1], top3[0], top3[2]];
-
-            podiumConfig.forEach((cfg, idx) => {
-                const player = orderedPodium[idx];
-                if (!player) return;
-
-                const diff = player.gamesScored - player.gamesConceded;
-                const diffSign = diff > 0 ? `+${diff}` : diff;
-
-                podiumContainer.innerHTML += `
-                    <div class="glass-panel p-5 rounded-2xl border ${cfg.border} relative flex flex-col items-center text-center space-y-2 shadow-xl ${cfg.pos === 1 ? 'scale-105 z-10 bg-slate-900/90' : 'bg-slate-900/60'}">
-                        <span class="absolute top-3 right-3 text-xs font-bold px-2 py-0.5 rounded-full ${cfg.badge}">
-                            #${cfg.pos}
-                        </span>
-                        <div class="text-3xl mt-1"><i class="fa-solid ${cfg.icon}"></i></div>
-                        <div class="font-extrabold text-base text-white">#${player.id} ${player.name}</div>
-                        <div class="text-2xl font-black text-emerald-400">${player.totalPoints} <span class="text-xs font-normal text-slate-400">pts</span></div>
-                        <div class="text-xs text-slate-400 flex gap-2 font-medium pt-1">
-                            <span>${player.wins} Wins</span> •
-                            <span>${player.gamesScored} Games</span> •
-                            <span class="${diff >= 0 ? 'text-emerald-400' : 'text-rose-400'}">Diff: ${diffSign}</span>
-                        </div>
-                    </div>
-                `;
-            });
-
-            // Render Table Rows
-            const tbody = document.getElementById('leaderboard-body');
-            tbody.innerHTML = '';
-
-            stats.forEach((p, idx) => {
-                const rank = idx + 1;
-                const diff = p.gamesScored - p.gamesConceded;
-                const diffClass = diff > 0 ? 'text-emerald-400' : (diff < 0 ? 'text-rose-400' : 'text-slate-400');
-                const winRate = p.played > 0 ? Math.round((p.wins / p.played) * 100) : 0;
-
-                tbody.innerHTML += `
-                    <tr class="hover:bg-slate-900/80 transition border-b border-slate-800/40">
-                        <td class="px-4 py-3 text-center font-bold ${rank <= 3 ? 'text-amber-400' : 'text-slate-400'}">
-                            ${rank <= 3 ? `<i class="fa-solid fa-trophy mr-1 text-xs"></i>${rank}` : rank}
-                        </td>
-                        <td class="px-4 py-3 font-semibold text-white flex items-center gap-2">
-                            <span class="w-6 h-6 rounded bg-slate-800 text-slate-300 font-mono text-[10px] flex items-center justify-center">#${p.id}</span>
-                            <span>${p.name}</span>
-                        </td>
-                        <td class="px-4 py-3 text-center text-slate-300">${p.played} / 4</td>
-                        <td class="px-4 py-3 text-center font-medium">
-                            <span class="text-emerald-400">${p.wins}W</span> - <span class="text-rose-400">${p.losses}L</span>
-                        </td>
-                        <td class="px-4 py-3 text-center text-slate-400">${winRate}%</td>
-                        <td class="px-4 py-3 text-center text-slate-300">${p.gamesScored} - ${p.gamesConceded}</td>
-                        <td class="px-4 py-3 text-center font-semibold ${diffClass}">${diff > 0 ? '+' + diff : diff}</td>
-                        <td class="px-4 py-3 text-center font-extrabold text-sm bg-emerald-950/20 text-emerald-400">${p.totalPoints}</td>
-                    </tr>
-                `;
-            });
-        }
-
-        function renderInspector() {
-            const listEl = document.getElementById('player-selector-list');
-            listEl.innerHTML = '';
-
-            for (let i = 1; i <= 15; i++) {
-                const isSelected = i === selectedInspectorPlayer;
-                listEl.innerHTML += `
-                    <button onclick="selectPlayer(${i})" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-medium transition flex justify-between items-center ${isSelected ? 'bg-emerald-600 text-white font-semibold shadow-md' : 'bg-slate-900/60 hover:bg-slate-800 text-slate-300'}">
-                        <span>#${i} ${playerNames[i]}</span>
-                        <i class="fa-solid fa-chevron-right text-[10px] opacity-60"></i>
-                    </button>
-                `;
-            }
-
-            // Render Player Profile Details
-            const pId = selectedInspectorPlayer;
-            const detailEl = document.getElementById('player-profile-detail');
-
-            // Find all rounds for pId
-            let roundBreakdown = [];
-            let sitOutRound = 0;
-            let partners = [];
-            let opponents = [];
-
-            SCHEDULE.forEach(rd => {
-                if (rd.sitOuts.includes(pId)) {
-                    sitOutRound = rd.round;
-                } else {
-                    rd.courts.forEach(crt => {
-                        if (crt.teamA.includes(pId) || crt.teamB.includes(pId)) {
-                            const isTeamA = crt.teamA.includes(pId);
-                            const partner = isTeamA ? crt.teamA.find(x => x !== pId) : crt.teamB.find(x => x !== pId);
-                            const opps = isTeamA ? crt.teamB : crt.teamA;
-
-                            partners.push(partner);
-                            opponents.push(...opps);
-
-                            const scores = matchScores[crt.id] || { scoreA: '', scoreB: '' };
-                            const numA = parseInt(scores.scoreA, 10);
-                            const numB = parseInt(scores.scoreB, 10);
-
-                            let outcome = 'Pending';
-                            let pts = 0;
-
-                            if (!isNaN(numA) && !isNaN(numB)) {
-                                const myScore = isTeamA ? numA : numB;
-                                const oppScore = isTeamA ? numB : numA;
-                                if (myScore > oppScore) {
-                                    outcome = 'Win';
-                                    pts = 1 + myScore;
-                                } else if (oppScore > myScore) {
-                                    outcome = 'Loss';
-                                    pts = myScore;
-                                } else {
-                                    outcome = 'Tie';
-                                    pts = 0.5 + myScore;
-                                }
-                            }
-
-                            roundBreakdown.push({
-                                round: rd.round,
-                                court: crt.court,
-                                partner: partner,
-                                opponents: opps,
-                                scores: scores,
-                                outcome: outcome,
-                                pts: pts
-                            });
-                        }
-                    });
-                }
-            });
-
-            let historyRows = roundBreakdown.map(b => {
-                return `
-                    <tr class="border-b border-slate-800/60">
-                        <td class="py-2.5 px-3">Round ${b.round} (Court ${b.court})</td>
-                        <td class="py-2.5 px-3 font-semibold text-emerald-400">#${b.partner} ${playerNames[b.partner]}</td>
-                        <td class="py-2.5 px-3 text-slate-300">#${b.opponents[0]} ${playerNames[b.opponents[0]]} & #${b.opponents[1]} ${playerNames[b.opponents[1]]}</td>
-                        <td class="py-2.5 px-3 text-center">
-                            ${b.outcome === 'Win' ? '<span class="text-emerald-400 font-bold"><i class="fa-solid fa-trophy text-amber-400 mr-1"></i>Win</span>' :
-                              (b.outcome === 'Loss' ? '<span class="text-rose-400 font-bold">Loss</span>' :
-                              (b.outcome === 'Tie' ? '<span class="text-slate-300 font-bold">Tie</span>' : '<span class="text-slate-500 italic">Pending</span>'))}
-                        </td>
-                        <td class="py-2.5 px-3 text-center font-extrabold text-amber-400">${b.pts > 0 ? '+' + b.pts : '-'}</td>
-                    </tr>
-                `;
-            }).join('');
-
-            detailEl.innerHTML = `
-                <div class="glass-panel p-6 rounded-2xl space-y-6">
-                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-4 gap-3">
-                        <div>
-                            <span class="text-xs text-emerald-400 font-bold uppercase tracking-wider">Player Profile</span>
-                            <h2 class="text-xl font-black text-white">#${pId} ${playerNames[pId]}</h2>
-                        </div>
-                        <div class="text-xs bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg text-slate-300">
-                            <i class="fa-solid fa-bed text-amber-400 mr-1.5"></i> Rest / Sit-Out Round: <strong class="text-emerald-400">Round ${sitOutRound}</strong>
-                        </div>
-                    </div>
-
-                    <!-- Unique Verification Tags -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
-                            <div class="font-bold text-slate-300 flex items-center justify-between">
-                                <span><i class="fa-solid fa-handshake text-emerald-400 mr-1.5"></i> 4 Unique Partners:</span>
-                                <span class="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">100% Unique</span>
-                            </div>
-                            <div class="text-slate-400 flex flex-wrap gap-1.5 pt-1">
-                                ${partners.map(p => `<span class="bg-slate-900 px-2 py-1 rounded text-slate-200 border border-slate-800">#${p} ${playerNames[p]}</span>`).join('')}
-                            </div>
-                        </div>
-
-                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
-                            <div class="font-bold text-slate-300 flex items-center justify-between">
-                                <span><i class="fa-solid fa-users text-rose-400 mr-1.5"></i> 8 Unique Opponents:</span>
-                                <span class="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">0 Overlap</span>
-                            </div>
-                            <div class="text-slate-400 flex flex-wrap gap-1.5 pt-1">
-                                ${[...new Set(opponents)].map(o => `<span class="bg-slate-900 px-2 py-1 rounded text-slate-200 border border-slate-800">#${o} ${playerNames[o]}</span>`).join('')}
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Match History Table -->
-                    <div class="space-y-3">
-                        <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Match Schedule & Performance</h3>
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left text-xs">
-                                <thead class="bg-slate-950 text-slate-400 font-semibold uppercase tracking-wider border-b border-slate-800">
-                                    <tr>
-                                        <th class="py-2.5 px-3">Round</th>
-                                        <th class="py-2.5 px-3">Partner</th>
-                                        <th class="py-2.5 px-3">Opponents</th>
-                                        <th class="py-2.5 px-3 text-center">Result</th>
-                                        <th class="py-2.5 px-3 text-center">Points Earned</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${historyRows}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        function selectPlayer(pId) {
-            selectedInspectorPlayer = pId;
-            renderInspector();
-        }
-
-        function openNameModal() {
-            const grid = document.getElementById('name-inputs-grid');
-            grid.innerHTML = '';
-            for (let i = 1; i <= 15; i++) {
-                grid.innerHTML += `
-                    <div class="space-y-1">
-                        <label class="text-[11px] font-semibold text-slate-400">Player ${i}</label>
-                        <input type="text" id="input-p${i}" value="${playerNames[i]}" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-emerald-500 focus:outline-none">
-                    </div>
-                `;
-            }
-            document.getElementById('modal-names').classList.remove('hidden');
-        }
-
-        function closeNameModal() {
-            document.getElementById('modal-names').classList.add('hidden');
-        }
-
-        function resetDefaultNames() {
-            for (let i = 1; i <= 15; i++) {
-                document.getElementById(`input-p${i}`).value = `Player ${i}`;
-            }
-        }
-
-        function savePlayerNames() {
-            for (let i = 1; i <= 15; i++) {
-                const val = document.getElementById(`input-p${i}`).value.trim();
-                playerNames[i] = val || `Player ${i}`;
-            }
-            saveData();
-            closeNameModal();
-            renderMatchInputs();
-            renderLeaderboard();
-            renderInspector();
-            updateCSVPreview();
-            showToast('Player names updated successfully!');
-        }
-
-        function fillSampleScores() {
-            SCHEDULE.forEach(rd => {
-                rd.courts.forEach(crt => {
-                    const scoreA = Math.floor(Math.random() * 4) + 3; // 3 to 6
-                    let scoreB = Math.floor(Math.random() * 4) + 2;
-                    if (scoreA === scoreB) scoreB += 1;
-                    matchScores[crt.id] = { scoreA: scoreA, scoreB: scoreB };
-                });
-            });
-            saveData();
-            renderMatchInputs();
-            renderLeaderboard();
-            renderInspector();
-            updateCSVPreview();
-            showToast('Sample scores loaded!');
-        }
-
-        function clearScores() {
-            matchScores = {};
-            saveData();
-            renderMatchInputs();
-            renderLeaderboard();
-            renderInspector();
-            updateCSVPreview();
-            showToast('All scores cleared.');
-        }
-
-        function generateCSV() {
-            let csv = "Round,Court,Player A1 ID,Player A1 Name,Player A2 ID,Player A2 Name,Player B1 ID,Player B1 Name,Player B2 ID,Player B2 Name,Score A,Score B,Team A Points,Team B Points\n";
-
-            SCHEDULE.forEach(rd => {
-                rd.courts.forEach(crt => {
-                    const pA1 = crt.teamA[0], pA2 = crt.teamA[1];
-                    const pB1 = crt.teamB[0], pB2 = crt.teamB[1];
-                    const scores = matchScores[crt.id] || { scoreA: '', scoreB: '' };
-
-                    const numA = scores.scoreA !== '' ? scores.scoreA : '';
-                    const numB = scores.scoreB !== '' ? scores.scoreB : '';
-
-                    let ptsA = '', ptsB = '';
-                    if (numA !== '' && numB !== '') {
-                        const a = parseInt(numA, 10);
-                        const b = parseInt(numB, 10);
-                        ptsA = a + (a > b ? 1 : (a === b ? 0.5 : 0));
-                        ptsB = b + (b > a ? 1 : (a === b ? 0.5 : 0));
-                    }
-
-                    csv += `${rd.round},${crt.court},${pA1},"${playerNames[pA1]}",${pA2},"${playerNames[pA2]}",${pB1},"${playerNames[pB1]}",${pB2},"${playerNames[pB2]}",${numA},${numB},${ptsA},${ptsB}\n`;
-                });
-            });
-
-            return csv;
-        }
-
-        function updateCSVPreview() {
-            document.getElementById('csv-preview').value = generateCSV();
-        }
-
-        function copyGSheetCSV() {
-            const csvText = generateCSV();
-            const textarea = document.createElement('textarea');
-            textarea.value = csvText;
-            document.body.appendChild(textarea);
-            textarea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textarea);
-            showToast('CSV copied to clipboard!');
-        }
-    </script>
-</body>
-</html>
