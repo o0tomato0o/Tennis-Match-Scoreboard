@@ -137,11 +137,6 @@
         </section>
 
         <section id="view-standings" class="space-y-6 hidden">
-            <!-- Podium Display -->
-            <div id="podium-container" class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                <!-- Dynamically populated -->
-            </div>
-
             <!-- Full Leaderboard Table -->
             <div class="glass-panel rounded-2xl overflow-hidden shadow-xl">
                 <div class="p-4 bg-slate-900/80 border-b border-slate-800 flex justify-between items-center">
@@ -423,7 +418,6 @@
 
         let mqttClient = null;
         let broadcastChannel = null;
-        let mqttSenderId = null;
 
         function initSyncEngine() {
             // Channel 1: Local Broadcast Channel for instant multi-tab sync
@@ -431,7 +425,9 @@
                 if ('BroadcastChannel' in window) {
                     broadcastChannel = new BroadcastChannel(`tennis_room_${roomCode}`);
                     broadcastChannel.onmessage = (event) => {
-                        handleIncomingMessage(event.data);
+                        if (event.data && event.data.type === 'SYNC_DATA') {
+                            applyIncomingData(event.data);
+                        }
                     };
                 }
             } catch(e) { console.log('BroadcastChannel fallback:', e); }
@@ -441,8 +437,7 @@
                 try {
                     const broker = 'wss://broker.hivemq.com:8884/mqtt';
                     const clientId = 'tennis_' + Math.random().toString(16).substring(2, 8);
-                    mqttSenderId = clientId;
-
+                    
                     mqttClient = mqtt.connect(broker, {
                         clientId: clientId,
                         keepalive: 30,
@@ -453,9 +448,7 @@
                     mqttClient.on('connect', () => {
                         updateSyncUIStatus(`Live (${roomCode})`, 'emerald', 'HiveMQ Relay');
                         mqttClient.subscribe(`tennis/scoreboard/v3/${roomCode}`, (err) => {
-                            // Ask any already-connected peers for their current data,
-                            // instead of overwriting the room with our own (possibly empty) state.
-                            if (!err) requestRoomState();
+                            if (!err) broadcastState();
                         });
                     });
 
@@ -463,7 +456,7 @@
                         try {
                             const data = JSON.parse(message.toString());
                             if (data.sender === clientId) return;
-                            handleIncomingMessage(data);
+                            applyIncomingData(data);
                         } catch(e) {}
                     });
 
@@ -481,9 +474,8 @@
         function broadcastState() {
             const payload = {
                 type: 'SYNC_DATA',
-                matchScores: matchScores,
-                playerNames: playerNames,
-                sender: mqttSenderId
+                matchScores: window.matchScores || {},
+                playerNames: window.playerNames || {}
             };
 
             // Broadcast to local tabs
@@ -491,46 +483,18 @@
                 try { broadcastChannel.postMessage(payload); } catch(e) {}
             }
 
-            // Broadcast to MQTT. retain:true means anyone who subscribes to this
-            // topic AFTER this message was sent still receives it immediately,
-            // so a device joining mid-tournament doesn't start out blank.
+            // Broadcast to MQTT
             if (mqttClient && mqttClient.connected) {
                 try {
-                    mqttClient.publish(`tennis/scoreboard/v3/${roomCode}`, JSON.stringify(payload), { retain: true });
-                } catch(e) {}
-            }
-        }
-
-        // Ask any peers already in the room to resend their current state.
-        // Used when we first join a room, or when the user hits "Fetch Room Scores".
-        function requestRoomState() {
-            const payload = { type: 'REQUEST_STATE', sender: mqttSenderId };
-
-            if (broadcastChannel) {
-                try { broadcastChannel.postMessage(payload); } catch(e) {}
-            }
-
-            if (mqttClient && mqttClient.connected) {
-                try {
+                    payload.sender = mqttClient.options ? mqttClient.options.clientId : 'me';
                     mqttClient.publish(`tennis/scoreboard/v3/${roomCode}`, JSON.stringify(payload));
                 } catch(e) {}
             }
         }
 
-        // Single entry point for anything arriving from BroadcastChannel or MQTT.
-        function handleIncomingMessage(data) {
-            if (!data || !data.type) return;
-            if (data.type === 'SYNC_DATA') {
-                applyIncomingData(data);
-            } else if (data.type === 'REQUEST_STATE') {
-                // A peer just joined and is asking for the current state - send ours.
-                broadcastState();
-            }
-        }
-
         function applyIncomingData(data) {
-            if (data.matchScores) matchScores = data.matchScores;
-            if (data.playerNames) playerNames = data.playerNames;
+            if (data.matchScores) window.matchScores = data.matchScores;
+            if (data.playerNames) window.playerNames = data.playerNames;
             saveLocalOnly();
             
             // Re-render views if active element isn't an active typing input
@@ -633,24 +597,19 @@
                 const sitOutNames = roundData.sitOuts.map(p => `#${p} ${playerNames[p]}`).join(', ');
 
                 let roundCard = document.createElement('div');
-                roundCard.className = 'glass-panel rounded-2xl p-5 space-y-4 shadow-lg border border-slate-800';
+                roundCard.className = 'glass-panel rounded-2xl p-4 sm:p-5 space-y-4 shadow-lg border border-slate-800';
 
                 let roundHeader = `
-                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800/80 pb-3 gap-2">
-                        <div class="flex items-center gap-3">
-                            <span class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-sm border border-emerald-500/30">
-                                R${roundData.round}
-                            </span>
-                            <h3 class="text-sm font-bold text-white">Round ${roundData.round} Matches</h3>
-                        </div>
-                        <div class="text-xs bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800 text-slate-400">
-                            <i class="fa-solid fa-bed text-amber-400 mr-1.5"></i> Rest / Sit-outs: <strong class="text-slate-200">${sitOutNames}</strong>
-                        </div>
+                    <div class="flex items-center gap-3 border-b border-slate-800/80 pb-3">
+                        <span class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-sm border border-emerald-500/30">
+                            R${roundData.round}
+                        </span>
+                        <h3 class="text-sm sm:text-base font-bold text-white">Round ${roundData.round} Matches</h3>
                     </div>
                 `;
 
                 let courtsGrid = document.createElement('div');
-                courtsGrid.className = 'grid grid-cols-1 md:grid-cols-3 gap-4';
+                courtsGrid.className = 'grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4';
 
                 roundData.courts.forEach(court => {
                     const matchId = court.id;
@@ -659,52 +618,52 @@
                     const pA1 = court.teamA[0], pA2 = court.teamA[1];
                     const pB1 = court.teamB[0], pB2 = court.teamB[1];
 
-                    let outcomeBadge = '<span class="text-slate-500 italic">Enter score</span>';
+                    let outcomeBadge = '<span class="text-slate-500 italic text-[11px]">Enter score</span>';
                     const numA = parseFloat(scores.scoreA);
                     const numB = parseFloat(scores.scoreB);
 
                     if (!isNaN(numA) && !isNaN(numB)) {
                         if (numA > numB) {
-                            outcomeBadge = `<span class="text-emerald-400 font-semibold"><i class="fa-solid fa-trophy mr-1 text-amber-400"></i> Team A Wins (+1 Set Pt)</span>`;
+                            outcomeBadge = `<span class="text-emerald-400 font-semibold text-[11px]"><i class="fa-solid fa-trophy mr-1 text-amber-400"></i>Team A Wins</span>`;
                         } else if (numB > numA) {
-                            outcomeBadge = `<span class="text-emerald-400 font-semibold"><i class="fa-solid fa-trophy mr-1 text-amber-400"></i> Team B Wins (+1 Set Pt)</span>`;
+                            outcomeBadge = `<span class="text-emerald-400 font-semibold text-[11px]"><i class="fa-solid fa-trophy mr-1 text-amber-400"></i>Team B Wins</span>`;
                         } else {
-                            outcomeBadge = `<span class="text-slate-300 font-semibold">Tie Game (+0.5 Set Pt)</span>`;
+                            outcomeBadge = `<span class="text-slate-300 font-semibold text-[11px]">Tie Game</span>`;
                         }
                     }
 
                     let courtHtml = `
-                        <div class="bg-slate-950/70 p-4 rounded-xl border border-slate-800/80 flex flex-col justify-between space-y-3">
-                            <div class="flex justify-between items-center text-xs text-slate-400 font-semibold">
-                                <span>Court ${court.court}</span>
+                        <div class="bg-slate-950/80 p-3.5 sm:p-4 rounded-xl border border-slate-800/80 flex flex-col justify-between space-y-3">
+                            <div class="flex justify-between items-center text-xs text-slate-400 font-semibold border-b border-slate-800/60 pb-2">
+                                <span class="text-slate-300 font-bold">Court ${court.court}</span>
                                 <div id="badge-${matchId}">${outcomeBadge}</div>
                             </div>
 
-                            <div class="space-y-2">
-                                <!-- Team A -->
-                                <div class="flex justify-between items-center bg-slate-900/90 p-2.5 rounded-lg border border-slate-800">
-                                    <div class="text-xs">
-                                        <div class="font-bold text-slate-200">Team A</div>
-                                        <div class="text-[11px] text-slate-400">#${pA1} ${playerNames[pA1]} & #${pA2} ${playerNames[pA2]}</div>
-                                    </div>
+                            <!-- Mobile Compact Side-by-Side View -->
+                            <div class="flex items-center justify-between gap-1.5 sm:gap-2 pt-1">
+                                <!-- Team A Players (Left) -->
+                                <div class="flex-1 text-left min-w-0 space-y-1">
+                                    <div class="text-xs font-semibold text-white truncate" title="#${pA1} ${playerNames[pA1]}">#${pA1} ${playerNames[pA1]}</div>
+                                    <div class="text-xs font-semibold text-white truncate" title="#${pA2} ${playerNames[pA2]}">#${pA2} ${playerNames[pA2]}</div>
+                                </div>
+
+                                <!-- Center Score Inputs -->
+                                <div class="flex items-center justify-center gap-1 shrink-0 px-0.5">
                                     <input type="number" min="0" max="99" id="input-${matchId}-A" value="${scores.scoreA !== undefined ? scores.scoreA : ''}"
                                         oninput="onScoreChange('${matchId}', 'scoreA', this.value)"
                                         placeholder="0"
-                                        class="w-12 h-9 text-center text-sm font-bold bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-lg text-emerald-400 focus:outline-none">
-                                </div>
-
-                                <div class="text-center text-[10px] text-slate-600 uppercase tracking-widest font-bold">VS</div>
-
-                                <!-- Team B -->
-                                <div class="flex justify-between items-center bg-slate-900/90 p-2.5 rounded-lg border border-slate-800">
-                                    <div class="text-xs">
-                                        <div class="font-bold text-slate-200">Team B</div>
-                                        <div class="text-[11px] text-slate-400">#${pB1} ${playerNames[pB1]} & #${pB2} ${playerNames[pB2]}</div>
-                                    </div>
+                                        class="w-11 h-10 text-center text-base font-extrabold bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-lg text-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                    <span class="text-slate-500 font-bold text-base px-0.5">:</span>
                                     <input type="number" min="0" max="99" id="input-${matchId}-B" value="${scores.scoreB !== undefined ? scores.scoreB : ''}"
                                         oninput="onScoreChange('${matchId}', 'scoreB', this.value)"
                                         placeholder="0"
-                                        class="w-12 h-9 text-center text-sm font-bold bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-lg text-emerald-400 focus:outline-none">
+                                        class="w-11 h-10 text-center text-base font-extrabold bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-lg text-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                </div>
+
+                                <!-- Team B Players (Right) -->
+                                <div class="flex-1 text-right min-w-0 space-y-1">
+                                    <div class="text-xs font-semibold text-white truncate" title="#${pB1} ${playerNames[pB1]}">#${pB1} ${playerNames[pB1]}</div>
+                                    <div class="text-xs font-semibold text-white truncate" title="#${pB2} ${playerNames[pB2]}">#${pB2} ${playerNames[pB2]}</div>
                                 </div>
                             </div>
                         </div>
@@ -712,8 +671,19 @@
                     courtsGrid.innerHTML += courtHtml;
                 });
 
+                let roundFooter = `
+                    <div class="pt-3 border-t border-slate-800/80">
+                        <div class="text-xs bg-slate-950/80 px-3 py-2 rounded-xl border border-slate-800 text-slate-400 flex flex-wrap items-center gap-1.5">
+                            <i class="fa-solid fa-bed text-amber-400 mr-1"></i>
+                            <span class="font-semibold text-slate-300">Resting Players:</span>
+                            <span class="text-slate-200 font-medium">${sitOutNames}</span>
+                        </div>
+                    </div>
+                `;
+
                 roundCard.innerHTML = roundHeader;
                 roundCard.appendChild(courtsGrid);
+                roundCard.innerHTML += roundFooter;
                 container.appendChild(roundCard);
             });
         }
@@ -732,14 +702,14 @@
 
                 if (!isNaN(numA) && !isNaN(numB)) {
                     if (numA > numB) {
-                        badgeEl.innerHTML = `<span class="text-emerald-400 font-semibold"><i class="fa-solid fa-trophy mr-1 text-amber-400"></i> Team A Wins (+1 Set Pt)</span>`;
+                        badgeEl.innerHTML = `<span class="text-emerald-400 font-semibold text-[11px]"><i class="fa-solid fa-trophy mr-1 text-amber-400"></i>Team A Wins</span>`;
                     } else if (numB > numA) {
-                        badgeEl.innerHTML = `<span class="text-emerald-400 font-semibold"><i class="fa-solid fa-trophy mr-1 text-amber-400"></i> Team B Wins (+1 Set Pt)</span>`;
+                        badgeEl.innerHTML = `<span class="text-emerald-400 font-semibold text-[11px]"><i class="fa-solid fa-trophy mr-1 text-amber-400"></i>Team B Wins</span>`;
                     } else {
-                        badgeEl.innerHTML = `<span class="text-slate-300 font-semibold">Tie Game (+0.5 Set Pt)</span>`;
+                        badgeEl.innerHTML = `<span class="text-slate-300 font-semibold text-[11px]">Tie Game</span>`;
                     }
                 } else {
-                    badgeEl.innerHTML = `<span class="text-slate-500 italic">Enter score</span>`;
+                    badgeEl.innerHTML = `<span class="text-slate-500 italic text-[11px]">Enter score</span>`;
                 }
             }
         }
@@ -813,44 +783,6 @@
                 if (diffB !== diffA) return diffB - diffA;
                 return b.gamesScored - a.gamesScored;
             });
-
-            // Render Podium
-            const podiumContainer = document.getElementById('podium-container');
-            if (podiumContainer) {
-                podiumContainer.innerHTML = '';
-                const top3 = stats.slice(0, 3);
-                const podiumConfig = [
-                    { pos: 2, label: '2nd Place', border: 'border-slate-400', badge: 'bg-slate-400 text-slate-950', icon: 'fa-medal text-slate-300' },
-                    { pos: 1, label: '1st Champion', border: 'border-amber-400', badge: 'bg-amber-400 text-slate-950', icon: 'fa-crown text-amber-400' },
-                    { pos: 3, label: '3rd Place', border: 'border-amber-700', badge: 'bg-amber-700 text-white', icon: 'fa-award text-amber-600' }
-                ];
-
-                const orderedPodium = [top3[1], top3[0], top3[2]];
-
-                podiumConfig.forEach((cfg, idx) => {
-                    const player = orderedPodium[idx];
-                    if (!player) return;
-
-                    const diff = player.gamesScored - player.gamesConceded;
-                    const diffSign = diff > 0 ? `+${diff}` : diff;
-
-                    podiumContainer.innerHTML += `
-                        <div class="glass-panel p-5 rounded-2xl border ${cfg.border} relative flex flex-col items-center text-center space-y-2 shadow-xl ${cfg.pos === 1 ? 'scale-105 z-10 bg-slate-900/90' : 'bg-slate-900/60'}">
-                            <span class="absolute top-3 right-3 text-xs font-bold px-2 py-0.5 rounded-full ${cfg.badge}">
-                                #${cfg.pos}
-                            </span>
-                            <div class="text-3xl mt-1"><i class="fa-solid ${cfg.icon}"></i></div>
-                            <div class="font-extrabold text-base text-white">#${player.id} ${player.name}</div>
-                            <div class="text-2xl font-black text-emerald-400">${player.totalPoints} <span class="text-xs font-normal text-slate-400">pts</span></div>
-                            <div class="text-xs text-slate-400 flex gap-2 font-medium pt-1">
-                                <span>${player.wins} Wins</span> •
-                                <span>${player.gamesScored} Games</span> •
-                                <span class="${diff >= 0 ? 'text-emerald-400' : 'text-rose-400'}">Diff: ${diffSign}</span>
-                            </div>
-                        </div>
-                    `;
-                });
-            }
 
             // Render Table Rows
             const tbody = document.getElementById('leaderboard-body');
@@ -1181,7 +1113,7 @@
         }
 
         function manualPullScores() {
-            requestRoomState();
+            broadcastState();
             showToast('Requesting room scores...');
         }
 
@@ -1198,3 +1130,17 @@
     </script>
 </body>
 </html>
+```
+
+---
+
+### How to Fix Your Page on GitHub Right Now
+
+1. Go to your repository: **[https://github.com/o0tomato0o/Tennis-Match-Scoreboard](https://github.com/o0tomato0o/Tennis-Match-Scoreboard)**
+2. Click on **`index.html`** in the file list.
+3. Click the **Pencil icon** ✏️ (*Edit this file*).
+4. Select all existing text, delete it, and paste the code from `index.html` above.
+5. Scroll down to the bottom and click the green **Commit changes** button.
+6. Wait **1 to 2 minutes** for GitHub Pages to deploy.
+
+Once updated, open **`https://o0tomato0o.github.io/Tennis-Match-Scoreboard/?room=SMTC`** on your phone or desktop. The page will load smoothly without freezing or going blank!
