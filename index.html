@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>15-Player Perfect Doubles Tournament Scorekeeper</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script>
@@ -66,8 +67,9 @@
             <!-- Global Action Controls -->
             <div class="flex items-center flex-wrap gap-2">
                 <div id="sync-status" class="text-xs px-2.5 py-1.5 rounded-lg bg-emerald-950/60 text-emerald-400 border border-emerald-800/80 flex items-center gap-1.5 font-medium">
-                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <i class="fa-solid fa-wifi text-[10px]"></i> <span id="sync-text">Live Multi-Court Sync</span>
+                    <span id="sync-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <i class="fa-solid fa-wifi text-[10px]"></i> <span id="sync-text">Live Sync (Room: TOMATO-15)</span>
+                    <button onclick="changeRoomCode()" class="ml-1 text-[10px] underline hover:text-white" title="Change Room Code">Edit</button>
                 </div>
                 <button onclick="fillSampleScores()" class="text-xs px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center gap-1.5">
                     <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i> Sample Scores
@@ -244,117 +246,117 @@
                     <div class="flex justify-between items-center text-xs text-slate-400">
                         <span>CSV Data Preview (Match Schedule & Scores)</span>
                     </div>
-                    <textarea id="csv-preview" readonly class="w-full h-48 bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-xs text-slate-300 focus:outline-none"></textarea>
-                </div>
-            </div>
-        </section>
+    <!-- Real-Time WebSocket Multi-Device Sync Engine -->
+    <script>
+        let mqttClient = null;
+        let roomCode = localStorage.getItem('p15_room_code') || 'TOMATO-15';
 
-    </main>
+        function initRealtimeSync() {
+            const syncText = document.getElementById('sync-text');
+            const syncDot = document.getElementById('sync-dot');
+            if (syncText) syncText.innerText = `Live Sync (Room: ${roomCode})`;
 
-    <!-- MODAL: Player Name Customizer -->
-    <div id="modal-names" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="glass-panel w-full max-w-2xl rounded-2xl p-6 space-y-4 shadow-2xl border border-slate-700">
-            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
-                <h3 class="text-sm font-bold text-white flex items-center gap-2">
-                    <i class="fa-solid fa-users text-emerald-400"></i> Edit Player Names
-                </h3>
-                <button onclick="closeNameModal()" class="text-slate-400 hover:text-white p-1">
-                    <i class="fa-solid fa-xmark text-lg"></i>
-                </button>
-            </div>
-            <p class="text-xs text-slate-400">Assign names to Player Numbers 1 through 15. Names will automatically update across all tables, cards, and export files.</p>
-            
-            <div id="name-inputs-grid" class="grid grid-cols-1 sm:grid-cols-3 gap-3 max-h-80 overflow-y-auto pr-1 py-1">
-                <!-- Dynamically generated 15 inputs -->
-            </div>
-
-            <div class="flex justify-end gap-2 pt-3 border-t border-slate-800">
-                <button onclick="resetDefaultNames()" class="px-3 py-2 text-xs text-slate-400 hover:text-slate-200">Reset Defaults</button>
-                <button onclick="savePlayerNames()" class="px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition">Save Names</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Toast Notification Container -->
-    <div id="toast" class="fixed bottom-5 right-5 bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-xs font-semibold shadow-xl transition-all duration-300 transform translate-y-10 opacity-0 pointer-events-none flex items-center gap-2">
-        <i class="fa-solid fa-circle-check"></i> <span id="toast-msg">Action completed</span>
-    </div>
-
-    <!-- Firebase Real-Time Firestore Synchronization -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'p15-doubles-app';
-        let db = null;
-        let auth = null;
-        let isFirebaseActive = false;
-
-        if (typeof __firebase_config !== 'undefined' && __firebase_config) {
             try {
-                const config = JSON.parse(__firebase_config);
-                const app = initializeApp(config);
-                db = getFirestore(app);
-                auth = getAuth(app);
+                mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt', {
+                    clientId: 'tennis_court_' + Math.random().toString(16).substring(2, 10),
+                    keepalive: 30,
+                    reconnectPeriod: 2000
+                });
 
-                const authenticate = async () => {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        await signInAnonymously(auth);
-                    }
-                };
+                mqttClient.on('connect', () => {
+                    if (syncDot) syncDot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+                    if (syncText) syncText.innerText = `Live Sync (${roomCode})`;
 
-                authenticate().then(() => {
-                    if (auth.currentUser) {
-                        isFirebaseActive = true;
-                        initFirestoreSync();
-                    }
-                }).catch(err => console.log('Auth sync warning:', err));
+                    mqttClient.subscribe(`tennis/scoreboard/${roomCode}`, (err) => {
+                        if (!err) {
+                            // Request current state from existing devices on court
+                            broadcastMessage({ type: 'REQUEST_STATE' });
+                        }
+                    });
+                });
+
+                mqttClient.on('reconnect', () => {
+                    if (syncDot) syncDot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse';
+                    if (syncText) syncText.innerText = `Reconnecting...`;
+                });
+
+                mqttClient.on('offline', () => {
+                    if (syncDot) syncDot.className = 'w-2 h-2 rounded-full bg-rose-500';
+                    if (syncText) syncText.innerText = `Offline (Local Only)`;
+                });
+
+                mqttClient.on('message', (topic, message) => {
+                    try {
+                        const data = JSON.parse(message.toString());
+                        if (data.sender === mqttClient.options.clientId) return; // Skip own messages
+
+                        if (data.type === 'SYNC_DATA') {
+                            window.matchScores = data.matchScores || {};
+                            window.playerNames = data.playerNames || {};
+                            saveLocalOnly();
+                            refreshAllViews();
+                            showToast('Scores synced live from court!');
+                        } else if (data.type === 'REQUEST_STATE') {
+                            // Respond with our state if we have scores
+                            broadcastMessage({
+                                type: 'SYNC_DATA',
+                                matchScores: window.matchScores,
+                                playerNames: window.playerNames
+                            });
+                        }
+                    } catch(e) { console.error('Sync parse error', e); }
+                });
             } catch(e) {
-                console.log('Local mode fallback');
+                console.error('WebSocket setup failed', e);
             }
         }
 
-        function initFirestoreSync() {
-            if (!db || !auth.currentUser) return;
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'tournament', 'liveState');
+        function broadcastMessage(payload) {
+            if (mqttClient && mqttClient.connected) {
+                payload.sender = mqttClient.options.clientId;
+                mqttClient.publish(`tennis/scoreboard/${roomCode}`, JSON.stringify(payload));
+            }
+        }
 
-            // Listen for live updates from other phones on court
-            onSnapshot(docRef, (snapshot) => {
-                if (snapshot.exists()) {
-                    const data = snapshot.data();
-                    if (data.matchScores) {
-                        window.matchScores = data.matchScores;
-                    }
-                    if (data.playerNames) {
-                        window.playerNames = data.playerNames;
-                    }
-                    if (typeof window.renderMatchInputs === 'function') window.renderMatchInputs();
-                    if (typeof window.renderLeaderboard === 'function') window.renderLeaderboard();
-                    if (typeof window.renderInspector === 'function') window.renderInspector();
-                    if (typeof window.updateCSVPreview === 'function') window.updateCSVPreview();
-                }
-            }, (error) => {
-                console.log('Snapshot listener error:', error);
+        function broadcastState() {
+            broadcastMessage({
+                type: 'SYNC_DATA',
+                matchScores: window.matchScores,
+                playerNames: window.playerNames
             });
         }
 
-        // Global function to sync state to Firestore
-        window.syncToCloud = async function() {
-            if (!isFirebaseActive || !db || !auth.currentUser) return;
-            try {
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'tournament', 'liveState');
-                await setDoc(docRef, {
-                    matchScores: window.matchScores || {},
-                    playerNames: window.playerNames || {},
-                    updatedAt: new Date().toISOString()
-                }, { merge: true });
-            } catch(e) {
-                console.error('Cloud sync error:', e);
+        function changeRoomCode() {
+            const newCode = prompt('Enter a Tournament Room Code (all phones must use the same code):', roomCode);
+            if (newCode && newCode.trim() !== '') {
+                roomCode = newCode.trim().toUpperCase();
+                localStorage.setItem('p15_room_code', roomCode);
+                if (mqttClient) mqttClient.end();
+                initRealtimeSync();
+                showToast(`Switched to room: ${roomCode}`);
             }
-        };
+        }
+
+        function refreshAllViews() {
+            if (typeof renderMatchInputs === 'function') renderMatchInputs();
+            if (typeof renderLeaderboard === 'function') renderLeaderboard();
+            if (typeof renderInspector === 'function') renderInspector();
+            if (typeof updateCSVPreview === 'function') updateCSVPreview();
+        }
+
+        function saveLocalOnly() {
+            try {
+                localStorage.setItem('p15_names', JSON.stringify(playerNames));
+                localStorage.setItem('p15_scores', JSON.stringify(matchScores));
+            } catch (e) {
+                console.error('Failed to save local storage', e);
+            }
+        }
+
+        function saveData() {
+            saveLocalOnly();
+            broadcastState();
+        }
     </script>
 
     <script>
@@ -419,6 +421,7 @@
 
         window.onload = function() {
             loadSavedData();
+            initRealtimeSync();
             renderMatchInputs();
             renderLeaderboard();
             renderInspector();
