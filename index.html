@@ -625,7 +625,7 @@
             container.innerHTML = '';
 
             SCHEDULE.forEach(roundData => {
-                const sitOutNames = roundData.sitOuts.map(p => `#${p} ${playerNames[p]}`).join(', ');
+                const sitOutNames = roundData.sitOuts.map(p => `${playerNames[p]}`).join(', ');
 
                 let roundCard = document.createElement('div');
                 roundCard.className = 'glass-panel rounded-2xl p-4 sm:p-5 space-y-4 shadow-lg border border-slate-800';
@@ -674,8 +674,8 @@
                             <div class="flex items-center justify-between gap-1.5 sm:gap-2 pt-1">
                                 <!-- Team A Players (Left) -->
                                 <div class="flex-1 text-left min-w-0 space-y-1">
-                                    <div class="text-xs font-semibold text-white truncate" title="#${pA1} ${playerNames[pA1]}">#${pA1} ${playerNames[pA1]}</div>
-                                    <div class="text-xs font-semibold text-white truncate" title="#${pA2} ${playerNames[pA2]}">#${pA2} ${playerNames[pA2]}</div>
+                                    <div class="text-xs font-semibold text-white truncate" title="${playerNames[pA1]}">${playerNames[pA1]}</div>
+                                    <div class="text-xs font-semibold text-white truncate" title="${playerNames[pA2]}">${playerNames[pA2]}</div>
                                 </div>
 
                                 <!-- Center Score Inputs -->
@@ -693,8 +693,8 @@
 
                                 <!-- Team B Players (Right) -->
                                 <div class="flex-1 text-right min-w-0 space-y-1">
-                                    <div class="text-xs font-semibold text-white truncate" title="#${pB1} ${playerNames[pB1]}">#${pB1} ${playerNames[pB1]}</div>
-                                    <div class="text-xs font-semibold text-white truncate" title="#${pB2} ${playerNames[pB2]}">#${pB2} ${playerNames[pB2]}</div>
+                                    <div class="text-xs font-semibold text-white truncate" title="${playerNames[pB1]}">${playerNames[pB1]}</div>
+                                    <div class="text-xs font-semibold text-white truncate" title="${playerNames[pB2]}">${playerNames[pB2]}</div>
                                 </div>
                             </div>
                         </div>
@@ -830,8 +830,7 @@
                             <td class="px-4 py-3 text-center font-bold ${rank <= 3 ? 'text-amber-400' : 'text-slate-400'}">
                                 ${rank <= 3 ? `<i class="fa-solid fa-trophy mr-1 text-xs"></i>${rank}` : rank}
                             </td>
-                            <td class="px-4 py-3 font-semibold text-white flex items-center gap-2">
-                                <span class="w-6 h-6 rounded bg-slate-800 text-slate-300 font-mono text-[10px] flex items-center justify-center">#${p.id}</span>
+                            <td class="px-4 py-3 font-semibold text-white">
                                 <span>${p.name}</span>
                             </td>
                             <td class="px-4 py-3 text-center text-slate-300">${p.played} / 4</td>
@@ -856,7 +855,7 @@
                     const isSelected = i === selectedInspectorPlayer;
                     listEl.innerHTML += `
                         <button onclick="selectPlayer(${i})" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-medium transition flex justify-between items-center ${isSelected ? 'bg-emerald-600 text-white font-semibold shadow-md' : 'bg-slate-900/60 hover:bg-slate-800 text-slate-300'}">
-                            <span>#${i} ${playerNames[i]}</span>
+                            <span>${playerNames[i]}</span>
                             <i class="fa-solid fa-chevron-right text-[10px] opacity-60"></i>
                         </button>
                     `;
@@ -925,8 +924,8 @@
                 return `
                     <tr class="border-b border-slate-800/60">
                         <td class="py-2.5 px-3">Round ${b.round} (Court ${b.court})</td>
-                        <td class="py-2.5 px-3 font-semibold text-emerald-400">#${b.partner} ${playerNames[b.partner]}</td>
-                        <td class="py-2.5 px-3 text-slate-300">#${b.opponents[0]} ${playerNames[b.opponents[0]]} & #${b.opponents[1]} ${playerNames[b.opponents[1]]}</td>
+                        <td class="py-2.5 px-3 font-semibold text-emerald-400">${playerNames[b.partner]}</td>
+                        <td class="py-2.5 px-3 text-slate-300">${playerNames[b.opponents[0]]} & ${playerNames[b.opponents[1]]}</td>
                         <td class="py-2.5 px-3 text-center">
                             ${b.outcome === 'Win' ? '<span class="text-emerald-400 font-bold"><i class="fa-solid fa-trophy text-amber-400 mr-1"></i>Win</span>' :
                               (b.outcome === 'Loss' ? '<span class="text-rose-400 font-bold">Loss</span>' :
@@ -942,7 +941,7 @@
                     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-4 gap-3">
                         <div>
                             <span class="text-xs text-emerald-400 font-bold uppercase tracking-wider">Player Profile</span>
-                            <h2 class="text-xl font-black text-white">#${pId} ${playerNames[pId]}</h2>
+                            <h2 class="text-xl font-black text-white">${playerNames[pId]}</h2>
                         </div>
                         <div class="text-xs bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg text-slate-300">
                             <i class="fa-solid fa-bed text-amber-400 mr-1.5"></i> Rest / Sit-Out Round: <strong class="text-emerald-400">Round ${sitOutRound}</strong>
@@ -956,7 +955,7 @@
                                 <span class="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">100% Unique</span>
                             </div>
                             <div class="text-slate-400 flex flex-wrap gap-1.5 pt-1">
-                                ${partners.map(p => `<span class="bg-slate-900 px-2 py-1 rounded text-slate-200 border border-slate-800">#${p} ${playerNames[p]}</span>`).join('')}
+                                ${partners.map(p => `<span class="bg-slate-900 px-2 py-1 rounded text-slate-200 border border-slate-800">${playerNames[p]}</span>`).join('')}
                             </div>
                         </div>
 
@@ -966,7 +965,7 @@
                                 <span class="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">0 Overlap</span>
                             </div>
                             <div class="text-slate-400 flex flex-wrap gap-1.5 pt-1">
-                                ${[...new Set(opponents)].map(o => `<span class="bg-slate-900 px-2 py-1 rounded text-slate-200 border border-slate-800">#${o} ${playerNames[o]}</span>`).join('')}
+                                ${[...new Set(opponents)].map(o => `<span class="bg-slate-900 px-2 py-1 rounded text-slate-200 border border-slate-800">${playerNames[o]}</span>`).join('')}
                             </div>
                         </div>
                     </div>
