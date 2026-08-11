@@ -418,6 +418,7 @@
 
         let mqttClient = null;
         let broadcastChannel = null;
+        let mqttSenderId = null;
 
         function initSyncEngine() {
             // Channel 1: Local Broadcast Channel for instant multi-tab sync
@@ -425,9 +426,7 @@
                 if ('BroadcastChannel' in window) {
                     broadcastChannel = new BroadcastChannel(`tennis_room_${roomCode}`);
                     broadcastChannel.onmessage = (event) => {
-                        if (event.data && event.data.type === 'SYNC_DATA') {
-                            applyIncomingData(event.data);
-                        }
+                        handleIncomingMessage(event.data);
                     };
                 }
             } catch(e) { console.log('BroadcastChannel fallback:', e); }
@@ -437,7 +436,8 @@
                 try {
                     const broker = 'wss://broker.hivemq.com:8884/mqtt';
                     const clientId = 'tennis_' + Math.random().toString(16).substring(2, 8);
-                    
+                    mqttSenderId = clientId;
+
                     mqttClient = mqtt.connect(broker, {
                         clientId: clientId,
                         keepalive: 30,
@@ -448,7 +448,9 @@
                     mqttClient.on('connect', () => {
                         updateSyncUIStatus(`Live (${roomCode})`, 'emerald', 'HiveMQ Relay');
                         mqttClient.subscribe(`tennis/scoreboard/v3/${roomCode}`, (err) => {
-                            if (!err) broadcastState();
+                            // Ask any already-connected peers for their current data,
+                            // instead of overwriting the room with our own (possibly empty) state.
+                            if (!err) requestRoomState();
                         });
                     });
 
@@ -456,7 +458,7 @@
                         try {
                             const data = JSON.parse(message.toString());
                             if (data.sender === clientId) return;
-                            applyIncomingData(data);
+                            handleIncomingMessage(data);
                         } catch(e) {}
                     });
 
@@ -474,8 +476,9 @@
         function broadcastState() {
             const payload = {
                 type: 'SYNC_DATA',
-                matchScores: window.matchScores || {},
-                playerNames: window.playerNames || {}
+                matchScores: matchScores,
+                playerNames: playerNames,
+                sender: mqttSenderId
             };
 
             // Broadcast to local tabs
@@ -483,18 +486,46 @@
                 try { broadcastChannel.postMessage(payload); } catch(e) {}
             }
 
-            // Broadcast to MQTT
+            // Broadcast to MQTT. retain:true means anyone who subscribes to this
+            // topic AFTER this message was sent still receives it immediately,
+            // so a device joining mid-tournament doesn't start out blank.
             if (mqttClient && mqttClient.connected) {
                 try {
-                    payload.sender = mqttClient.options ? mqttClient.options.clientId : 'me';
+                    mqttClient.publish(`tennis/scoreboard/v3/${roomCode}`, JSON.stringify(payload), { retain: true });
+                } catch(e) {}
+            }
+        }
+
+        // Ask any peers already in the room to resend their current state.
+        // Used when we first join a room, or when the user hits "Fetch Room Scores".
+        function requestRoomState() {
+            const payload = { type: 'REQUEST_STATE', sender: mqttSenderId };
+
+            if (broadcastChannel) {
+                try { broadcastChannel.postMessage(payload); } catch(e) {}
+            }
+
+            if (mqttClient && mqttClient.connected) {
+                try {
                     mqttClient.publish(`tennis/scoreboard/v3/${roomCode}`, JSON.stringify(payload));
                 } catch(e) {}
             }
         }
 
+        // Single entry point for anything arriving from BroadcastChannel or MQTT.
+        function handleIncomingMessage(data) {
+            if (!data || !data.type) return;
+            if (data.type === 'SYNC_DATA') {
+                applyIncomingData(data);
+            } else if (data.type === 'REQUEST_STATE') {
+                // A peer just joined and is asking for the current state - send ours.
+                broadcastState();
+            }
+        }
+
         function applyIncomingData(data) {
-            if (data.matchScores) window.matchScores = data.matchScores;
-            if (data.playerNames) window.playerNames = data.playerNames;
+            if (data.matchScores) matchScores = data.matchScores;
+            if (data.playerNames) playerNames = data.playerNames;
             saveLocalOnly();
             
             // Re-render views if active element isn't an active typing input
@@ -1113,7 +1144,7 @@
         }
 
         function manualPullScores() {
-            broadcastState();
+            requestRoomState();
             showToast('Requesting room scores...');
         }
 
@@ -1130,17 +1161,3 @@
     </script>
 </body>
 </html>
-```
-
----
-
-### How to Fix Your Page on GitHub Right Now
-
-1. Go to your repository: **[https://github.com/o0tomato0o/Tennis-Match-Scoreboard](https://github.com/o0tomato0o/Tennis-Match-Scoreboard)**
-2. Click on **`index.html`** in the file list.
-3. Click the **Pencil icon** ✏️ (*Edit this file*).
-4. Select all existing text, delete it, and paste the code from `index.html` above.
-5. Scroll down to the bottom and click the green **Commit changes** button.
-6. Wait **1 to 2 minutes** for GitHub Pages to deploy.
-
-Once updated, open **`https://o0tomato0o.github.io/Tennis-Match-Scoreboard/?room=SMTC`** on your phone or desktop. The page will load smoothly without freezing or going blank!
