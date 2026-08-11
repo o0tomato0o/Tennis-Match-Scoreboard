@@ -4,11 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>15-Player Perfect Doubles Tournament Scorekeeper</title>
+    
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
-    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    
+    <!-- Font Awesome & Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Safe Script Loading for MQTT and PeerJS -->
+    <script>
+        window.mqttLoaded = false;
+        window.peerLoaded = false;
+    </script>
+    <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js" onload="window.mqttLoaded=true;" onerror="console.warn('MQTT CDN blocked/unavailable')"></script>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" onload="window.peerLoaded=true;" onerror="console.warn('PeerJS CDN blocked/unavailable')"></script>
+
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -69,7 +80,7 @@
             <div class="flex items-center flex-wrap gap-2">
                 <div id="sync-status" onclick="openSyncModal()" class="text-xs px-2.5 py-1.5 rounded-lg bg-emerald-950/60 text-emerald-400 border border-emerald-800/80 flex items-center gap-1.5 font-medium cursor-pointer hover:bg-emerald-900/50 transition">
                     <span id="sync-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <i class="fa-solid fa-wifi text-[10px]"></i> <span id="sync-text">Live Sync (Room: TOMATO-15)</span>
+                    <i class="fa-solid fa-wifi text-[10px]"></i> <span id="sync-text">Live Sync</span>
                     <span class="ml-1 text-[10px] bg-emerald-800/60 px-1.5 py-0.5 rounded text-emerald-200">Manage</span>
                 </div>
                 <button onclick="fillSampleScores()" class="text-xs px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center gap-1.5">
@@ -92,7 +103,6 @@
             <button onclick="switchTab('standings')" id="tab-standings" class="tab-btn px-4 py-2.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
                 <i class="fa-solid fa-ranking-star"></i> Standings & Leaderboard
             </button>
-
             <button onclick="switchTab('inspector')" id="tab-inspector" class="tab-btn px-4 py-2.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
                 <i class="fa-solid fa-user-check"></i> Player Inspector
             </button>
@@ -104,7 +114,6 @@
 
     <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
-        <!-- TAB 1: MATCH SCOREKEEPER -->
         <section id="view-matches" class="space-y-6">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-900/60 p-4 rounded-xl border border-slate-800 gap-3">
                 <div class="flex items-center gap-3">
@@ -127,7 +136,6 @@
             </div>
         </section>
 
-        <!-- TAB 2: STANDINGS & LEADERBOARD -->
         <section id="view-standings" class="space-y-6 hidden">
             <!-- Podium Display -->
             <div id="podium-container" class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
@@ -164,7 +172,6 @@
             </div>
         </section>
 
-        <!-- TAB 3: PLAYER INSPECTOR -->
         <section id="view-inspector" class="space-y-6 hidden">
             <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <!-- Player Selector list -->
@@ -182,7 +189,6 @@
             </div>
         </section>
 
-        <!-- TAB 4: GOOGLE SHEETS BLUEPRINT -->
         <section id="view-gsheet" class="space-y-6 hidden">
             <div class="glass-panel p-6 rounded-2xl space-y-6 border border-emerald-500/20">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-4">
@@ -203,353 +209,10 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                     <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800">
                         <div class="font-bold text-emerald-400 mb-1">Step 1: Create Spreadsheet</div>
-                        <p class="text-slate-300">Open a new Google Sheet. Create two tabs at the bottom named <code class="text-amber-300">Matches</code> and <code class="text-amber-300">Leaderboard</code>.</p>
+                        <p class="text-slate-300">Open a new Google Sheet. Create two tabs named <code class="text-amber-300">Matches</code> and <code class="text-amber-300">Leaderboard</code>.</p>
                     </div>
                     <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800">
-                        <div class="font-bold text-emerald-400 mb-1">Step 2: Paste Tournament Schedule</div>
+                        <div class="font-bold text-emerald-400 mb-1">Step 2: Paste Schedule</div>
                         <p class="text-slate-300">Click the button above to copy CSV data, then paste into cell <code class="text-amber-300">A1</code> of the <code class="text-amber-300">Matches</code> tab.</p>
                     </div>
-                    <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800">
-                        <div class="font-bold text-emerald-400 mb-1">Step 3: Add Points Formula</div>
-                        <p class="text-slate-300">Use the formulas below for automated point and ranking calculations in your Google Sheet.</p>
-                    </div>
-                </div>
-
-                <!-- Google Sheets Formulas Reference -->
-                <div class="space-y-4">
-                    <h3 class="text-sm font-bold text-slate-200">Formula Cheat-Sheet for Google Sheets</h3>
-                    
-                    <div class="space-y-3 font-mono text-xs">
-                        <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
-                            <div class="text-slate-400 font-sans text-[11px] mb-1">Matches Tab Cell I2 (Team A Points):</div>
-                            <div class="text-emerald-300 select-all font-mono">=IF(ISBLANK(G2), "", IF(G2 > H2, G2 + 1, IF(G2 = H2, G2 + 0.5, G2)))</div>
-                        </div>
-
-                        <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
-                            <div class="text-slate-400 font-sans text-[11px] mb-1">Matches Tab Cell J2 (Team B Points):</div>
-                            <div class="text-emerald-300 select-all font-mono">=IF(ISBLANK(H2), "", IF(H2 > G2, H2 + 1, IF(G2 = H2, H2 + 0.5, H2)))</div>
-                        </div>
-
-                        <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
-                            <div class="text-slate-400 font-sans text-[11px] mb-1">Leaderboard Tab Cell H2 (Total Points for Player ID in A2):</div>
-                            <div class="text-emerald-300 select-all font-mono">=SUMIF(Matches!$C$2:$D$16, A2, Matches!$I$2:$I$16) + SUMIF(Matches!$E$2:$F$16, A2, Matches!$J$2:$J$16)</div>
-                        </div>
-
-                        <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
-                            <div class="text-slate-400 font-sans text-[11px] mb-1">Leaderboard Tab Cell D2 (Set Wins for Player ID in A2):</div>
-                            <div class="text-emerald-300 select-all font-mono">=SUMPRODUCT((Matches!$C$2:$D$16=A2)*(Matches!$G$2:$G$16 > Matches!$H$2:$H$16)) + SUMPRODUCT((Matches!$E$2:$F$16=A2)*(Matches!$H$2:$H$16 > Matches!$G$2:$G$16))</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- CSV Preview Code block -->
-                <div class="space-y-2">
-                    <div class="flex justify-between items-center text-xs text-slate-400">
-                        <span>CSV Data Preview (Match Schedule & Scores)</span>
-                    </div>
-                    <textarea id="csv-preview" readonly class="w-full h-48 bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-xs text-slate-300 focus:outline-none"></textarea>
-                </div>
-            </div>
-        </section>
-
-    </main>
-
-    <!-- MODAL: Player Name Customizer -->
-    <div id="modal-names" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <!-- ... existing name modal content ... -->
-    </div>
-
-    <!-- MODAL: Live Sync & Room Manager -->
-    <div id="modal-sync" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="glass-panel w-full max-w-md rounded-2xl p-6 space-y-5 shadow-2xl border border-slate-700">
-            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
-                <h3 class="text-sm font-bold text-white flex items-center gap-2">
-                    <i class="fa-solid fa-satellite-dish text-emerald-400"></i> Live Sync Settings & Room Link
-                </h3>
-                <button onclick="closeSyncModal()" class="text-slate-400 hover:text-white p-1">
-                    <i class="fa-solid fa-xmark text-lg"></i>
-                </button>
-            </div>
-
-            <div class="space-y-3">
-                <div>
-                    <label class="text-xs font-semibold text-slate-300 block mb-1">Tournament Room Code</label>
-                    <div class="flex gap-2">
-                        <input type="text" id="input-room-code" placeholder="e.g. SMTC" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-mono uppercase focus:border-emerald-500 focus:outline-none">
-                        <button onclick="applyRoomCodeFromInput()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-lg transition">
-                            Set Room
-                        </button>
-                    </div>
-                    <p class="text-[11px] text-slate-400 mt-1">All phones and computers must use the exact same room code to sync.</p>
-                </div>
-
-                <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2 text-xs">
-                    <div class="flex justify-between items-center">
-                        <span class="text-slate-400">Connection Status:</span>
-                        <span id="sync-modal-status" class="font-bold text-emerald-400 flex items-center gap-1.5">
-                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Connected
-                        </span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-slate-400">Active Room:</span>
-                        <span id="sync-modal-room" class="font-mono text-amber-300 font-bold">TOMATO-15</span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-slate-400">Active Server:</span>
-                        <span id="sync-modal-server" class="text-slate-300 font-mono text-[11px]">Primary Cloud Broker</span>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-2 pt-1">
-                    <button onclick="manualPushScores()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs text-white font-semibold flex items-center justify-center gap-1.5 transition">
-                        <i class="fa-solid fa-paper-plane text-emerald-400"></i> Push My Scores
-                    </button>
-                    <button onclick="manualPullScores()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs text-white font-semibold flex items-center justify-center gap-1.5 transition">
-                        <i class="fa-solid fa-rotate text-amber-400"></i> Fetch Room Scores
-                    </button>
-                </div>
-
-                <div class="pt-2 border-t border-slate-800">
-                    <button onclick="copyDirectRoomLink()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-950 transition">
-                        <i class="fa-solid fa-link"></i> Copy Direct Share Link for Phones
-                    </button>
-                    <p class="text-[10px] text-slate-400 text-center mt-1.5">Generates a URL with room code pre-embedded so scanning/opening connects instantly.</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Toast Notification Container -->
-    <div id="toast" class="fixed bottom-5 right-5 bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-xs font-semibold shadow-xl transition-all duration-300 transform translate-y-10 opacity-0 pointer-events-none flex items-center gap-2 z-50">
-        <i class="fa-solid fa-circle-check"></i> <span id="toast-msg">Action completed</span>
-    </div>
-
-    <!-- Real-Time WebSocket Multi-Device Sync Engine -->
-    <script>
-        let mqttClient = null;
-        let peerInstance = null;
-        let activePeerConnections = [];
-
-        // Public MQTT brokers to try in sequence for maximum reliability across carriers
-        const MQTT_BROKERS = [
-            'wss://broker.hivemq.com:8884/mqtt',
-            'wss://broker.emqx.io:8084/mqtt',
-            'wss://test.mosquitto.org:8081'
-        ];
-        let currentBrokerIndex = 0;
-
-        // Parse room code from URL query parameter ?room=SMTC or fallback to local storage
-        function getInitialRoomCode() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const roomParam = urlParams.get('room');
-            if (roomParam && roomParam.trim() !== '') {
-                const code = roomParam.trim().toUpperCase();
-                localStorage.setItem('p15_room_code', code);
-                return code;
-            }
-            return (localStorage.getItem('p15_room_code') || 'TOMATO-15').toUpperCase();
-        }
-
-        let roomCode = getInitialRoomCode();
-
-        function initRealtimeSync() {
-            updateSyncUIStatus('Connecting...', 'amber', 'Connecting to Cloud...');
-
-            // Clean up previous client
-            if (mqttClient) {
-                try { mqttClient.end(true); } catch(e) {}
-            }
-
-            const targetBroker = MQTT_BROKERS[currentBrokerIndex];
-            const clientId = 'tennis_court_' + Math.random().toString(16).substring(2, 10);
-
-            try {
-                mqttClient = mqtt.connect(targetBroker, {
-                    clientId: clientId,
-                    keepalive: 30,
-                    connectTimeout: 8000,
-                    reconnectPeriod: 3000
-                });
-
-                mqttClient.on('connect', () => {
-                    const serverName = targetBroker.includes('hivemq') ? 'HiveMQ Cloud' :
-                                      (targetBroker.includes('emqx') ? 'EMQX Cloud' : 'Mosquitto Server');
-                    updateSyncUIStatus(`Live (${roomCode})`, 'emerald', serverName);
-
-                    mqttClient.subscribe(`tennis/scoreboard/v2/${roomCode}`, (err) => {
-                        if (!err) {
-                            // Request state from other devices
-                            broadcastMessage({ type: 'REQUEST_STATE' });
-                        }
-                    });
-                });
-
-                mqttClient.on('error', (err) => {
-                    console.warn('MQTT connection error, trying fallback broker...', err);
-                    tryNextBroker();
-                });
-
-                mqttClient.on('offline', () => {
-                    updateSyncUIStatus(`Offline (Room: ${roomCode})`, 'rose', 'Disconnected');
-                });
-
-                mqttClient.on('message', (topic, message) => {
-                    try {
-                        const data = JSON.parse(message.toString());
-                        if (data.sender === clientId) return; // Ignore own messages
-
-                        handleIncomingSyncData(data);
-                    } catch(e) { console.error('Sync parse error', e); }
-                });
-            } catch(e) {
-                console.error('MQTT setup error:', e);
-                tryNextBroker();
-            }
-
-            initPeerJSConnection();
-        }
-
-        function tryNextBroker() {
-            currentBrokerIndex = (currentBrokerIndex + 1) % MQTT_BROKERS.length;
-            setTimeout(() => {
-                if (mqttClient && !mqttClient.connected) {
-                    initRealtimeSync();
-                }
-            }, 1000);
-        }
-
-        function initPeerJSConnection() {
-            try {
-                if (peerInstance) peerInstance.destroy();
-                const myPeerId = `tennis-p15-${roomCode}-${Math.random().toString(36).substring(2, 7)}`;
-                peerInstance = new Peer(myPeerId);
-
-                peerInstance.on('connection', (conn) => {
-                    activePeerConnections.push(conn);
-                    conn.on('data', (data) => handleIncomingSyncData(data));
-                });
-            } catch(e) { console.log('PeerJS fallback notice', e); }
-        }
-
-        function handleIncomingSyncData(data) {
-            if (data.type === 'SYNC_DATA') {
-                if (data.matchScores) window.matchScores = data.matchScores;
-                if (data.playerNames) window.playerNames = data.playerNames;
-                saveLocalOnly();
-                refreshViewsSafely();
-                showToast('Scores synced live from court!');
-            } else if (data.type === 'REQUEST_STATE') {
-                broadcastState();
-            }
-        }
-
-        function updateSyncUIStatus(text, color, serverLabel) {
-            const syncText = document.getElementById('sync-text');
-            const syncDot = document.getElementById('sync-dot');
-            const modalStatus = document.getElementById('sync-modal-status');
-            const modalRoom = document.getElementById('sync-modal-room');
-            const modalServer = document.getElementById('sync-modal-server');
-
-            const colorClasses = {
-                emerald: 'bg-emerald-400',
-                amber: 'bg-amber-400',
-                rose: 'bg-rose-500'
-            };
-
-            if (syncText) syncText.innerText = text;
-            if (syncDot) syncDot.className = `w-2 h-2 rounded-full ${colorClasses[color] || 'bg-emerald-400'} animate-pulse`;
-
-            if (modalStatus) {
-                modalStatus.className = `font-bold text-${color}-400 flex items-center gap-1.5`;
-                modalStatus.innerHTML = `<span class="w-2 h-2 rounded-full ${colorClasses[color] || 'bg-emerald-400'} animate-pulse"></span> ${text}`;
-            }
-            if (modalRoom) modalRoom.innerText = roomCode;
-            if (modalServer && serverLabel) modalServer.innerText = serverLabel;
-        }
-
-        function broadcastMessage(payload) {
-            payload.sender = mqttClient && mqttClient.options ? mqttClient.options.clientId : 'device_' + Math.random();
-            const msgStr = JSON.stringify(payload);
-
-            if (mqttClient && mqttClient.connected) {
-                mqttClient.publish(`tennis/scoreboard/v2/${roomCode}`, msgStr);
-            }
-
-            activePeerConnections.forEach(conn => {
-                if (conn.open) conn.send(payload);
-            });
-        }
-
-        function broadcastState() {
-            broadcastMessage({
-                type: 'SYNC_DATA',
-                matchScores: window.matchScores || {},
-                playerNames: window.playerNames || {}
-            });
-        }
-
-        function openSyncModal() {
-            document.getElementById('input-room-code').value = roomCode;
-            document.getElementById('modal-sync').classList.remove('hidden');
-        }
-
-        function closeSyncModal() {
-            document.getElementById('modal-sync').classList.add('hidden');
-        }
-
-        function applyRoomCodeFromInput() {
-            const val = document.getElementById('input-room-code').value.trim().toUpperCase();
-            if (val && val !== '') {
-                changeRoomCode(val);
-                closeSyncModal();
-            }
-        }
-
-        function changeRoomCode(newCode) {
-            roomCode = newCode.trim().toUpperCase();
-            localStorage.setItem('p15_room_code', roomCode);
-
-            // Update URL without reloading page
-            const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?room=' + roomCode;
-            window.history.pushState({ path: newUrl }, '', newUrl);
-
-            initRealtimeSync();
-            setTimeout(() => broadcastState(), 1000);
-            showToast(`Switched to room: ${roomCode}`);
-        }
-
-        function manualPushScores() {
-            broadcastState();
-            showToast('Local scores pushed to room!');
-        }
-
-        function manualPullScores() {
-            broadcastMessage({ type: 'REQUEST_STATE' });
-            showToast('Requesting latest scores from room...');
-        }
-
-        function copyDirectRoomLink() {
-            const shareUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?room=' + roomCode;
-            const textarea = document.createElement('textarea');
-            textarea.value = shareUrl;
-            document.body.appendChild(textarea);
-            textarea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textarea);
-            showToast('Room link copied! Share with players.');
-        }
-
-        function refreshViewsSafely() {
-            // Update input fields without resetting active typing focus
-            const activeEl = document.activeElement;
-            const activeInputId = activeEl ? activeEl.id : null;
-
-            if (typeof renderMatchInputs === 'function' && !activeInputId) renderMatchInputs();
-            if (typeof renderLeaderboard === 'function') renderLeaderboard();
-            if (typeof renderInspector === 'function') renderInspector();
-            if (typeof updateCSVPreview === 'function') updateCSVPreview();
-        }
-
-        function saveLocalOnly() {
-            try {
-                localStorage.setItem('p15_names', JSON.stringify(playerNames));
+                    <div class="
